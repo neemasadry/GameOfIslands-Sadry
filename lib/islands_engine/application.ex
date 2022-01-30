@@ -10,6 +10,9 @@ defmodule IslandsEngine.Application do
     children = [
       # Starts a worker by calling: IslandsEngine.Worker.start_link(arg)
       # {IslandsEngine.Worker, arg}
+      
+      # Starts the Registry and specifies that keys should be unique for the Registry.Game module
+      {Registry, keys: :unique, name: Registry.Game}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
