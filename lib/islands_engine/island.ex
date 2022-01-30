@@ -22,6 +22,32 @@ defmodule IslandsEngine.Island do
 		end
 	end
 
+	# Returns a list of valid island types; used to validate that all island types placed on board
+	def types(), do: [:atoll, :dot, :l_shape, :s_shape, :square]
+
+  def guess(island, coordinate) do
+    case MapSet.member?(island.coordinates, coordinate) do
+    	# Transform island by adding the correctly guessed coordinate to the hit coordinates set
+			# After, return a tuple containing :hit and the transformed island
+	    true ->
+		    hit_coordinates = MapSet.put(island.hit_coordinates, coordinate)
+		    {:hit, %{island | hit_coordinates: hit_coordinates}}
+
+		  # If guessed coordinate is incorrect, perform no transformations and just return :miss
+	    false -> :miss
+    end
+  end
+
+  # Only need to return a Boolean if island is forested or not; no transformations performed
+  def forested?(island), do:
+		MapSet.equal?(island.coordinates, island.hit_coordinates)
+
+	# Check if an island's coordinates overlap with another island's coordinates
+	# disjoint?/2 checks to see if two MapSets have no members in common
+		# ex.   MapSet.disjoint?(MapSet.new([1, 2]), MapSet.new([2, 3]))  => false
+	def overlaps?(existing_island, new_island), do:
+		not MapSet.disjoint?(existing_island.coordinates, new_island.coordinates)
+
 	# Validate coordinate(s)
 		# Enum.reduce_while takes the following:
 			#	1) Enumerable
