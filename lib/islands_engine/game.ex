@@ -1,4 +1,6 @@
 defmodule IslandsEngine.Game do
+	alias IslandsEngine.{Board, Coordinate, Guesses, Island, Rules}
+
 	# GenServer Pattern (3 parts) - a client functions wraps a GenServer module function, which triggers a callback:
 		# 1) Client function - serves as the public interface where other processes will call
 		# 2) A function from the GenServer module
@@ -42,5 +44,43 @@ defmodule IslandsEngine.Game do
 			# not necessary so prefixed with _
 	# def handle_call(:demo_call, _from, state), do:
   #   {:reply, state, state}
+
+  # Enables us to write: Game.start_link(<initial state>) instead of prefixing with GenServer
+  	# GenServer Pattern: define a public function that wraps a GenServer module function that triggers a callback
+  # Note: GenServer uses only the middle argument, name, to the start_link/3 callback
+  def start_link(name) when is_binary(name), do:
+  	GenServer.start_link(__MODULE__, name, []) # __MODULE__ is a macro that returns current module
+
+  # Added Guard clause to make sure name is a string
+  def add_player(game, name) when is_binary(name), do:
+    GenServer.call(game, {:add_player, name})
+
+  # Pattern match on an argument, perform necessary initializations, and return tagged tuple {:ok, initial_state}
+  def init(name) do
+    player1 = %{name: name, board: Board.new(), guesses: Guesses.new()}
+    player2 = %{name: nil,  board: Board.new(), guesses: Guesses.new()}
+    {:ok, %{player1: player1, player2: player2, rules: %Rules{}}}
+  end
+
+  # handle_call/3 that pattern matches for the {:add_player, name} tuple from GenServer.call/3
+  def handle_call({:add_player, name}, _from, state_data) do
+    with {:ok, rules} <- Rules.check(state_data.rules, :add_player)
+    do
+      state_data
+      |> update_player2_name(name)
+      |> update_rules(rules)
+      |> reply_success(:ok)
+    else
+      :error -> {:reply, :error, state_data}
+    end
+  end
+
+  defp update_player2_name(state_data, name), do:
+  	# Kernel.put_in/2 transforms values nested in a map and returns the whole transformed map
+  	put_in(state_data.player2.name, name)
+
+  defp update_rules(state_data, rules), do: %{state_data | rules: rules}
+
+  defp reply_success(state_data, reply), do: {:reply, reply, state_data}
 
 end
