@@ -4,6 +4,8 @@ defmodule IslandsEngine.Game do
 	# Module attribute so that player matches either :player1 or :player2 only in position_island/5
 	@players [:player1, :player2]
 
+	@timeout 60 * 60 * 1000
+
 	# GenServer Pattern (3 parts) - a client functions wraps a GenServer module function, which triggers a callback:
 		# 1) Client function - serves as the public interface where other processes will call
 		# 2) A function from the GenServer module
@@ -15,7 +17,7 @@ defmodule IslandsEngine.Game do
 	
 	# Triggers macro that compiles default implementations for all the GenServer callbacks into our Game module
 	# adds start_link/3 and start/3 functions
-	use GenServer
+	use GenServer, start: {__MODULE__, :start_link, []}, restart: :transient
 
 	# def demo_call(game), do:
  #    GenServer.call(game, :demo_call)
@@ -71,10 +73,36 @@ defmodule IslandsEngine.Game do
   	GenServer.call(game, {:guess_coordinate, player, row, col})
 
   # Pattern match on an argument, perform necessary initializations, and return tagged tuple {:ok, initial_state}
+  # def init(name) do
+  #   player1 = %{name: name, board: Board.new(), guesses: Guesses.new()}
+  #   player2 = %{name: nil,  board: Board.new(), guesses: Guesses.new()}
+  #   {:ok, %{player1: player1, player2: player2, rules: %Rules{}}}
+  # end
+
   def init(name) do
-    player1 = %{name: name, board: Board.new(), guesses: Guesses.new()}
-    player2 = %{name: nil,  board: Board.new(), guesses: Guesses.new()}
-    {:ok, %{player1: player1, player2: player2, rules: %Rules{}}}
+    send(self(), {:set_state, name})
+    {:ok, fresh_state(name)}
+  end
+
+  def terminate({:shutdown, :timeout}, state_data) do
+    :ets.delete(:game_state, state_data.player1.name)
+    :ok
+  end
+  def terminate(_reason, _state), do: :ok
+
+  # Handle error by returning :stop tuple
+  def handle_info(:timeout, state_data) do
+    {:stop, {:shutdown, :timeout}, state_data}
+  end
+
+  def handle_info({:set_state, name}, _state_data) do
+    state_data =
+    case :ets.lookup(:game_state, name) do
+      [] -> fresh_state(name)
+      [{_key, state}] -> state
+    end
+    :ets.insert(:game_state, {name, state_data})
+    {:noreply, state_data, @timeout}
   end
 
   # handle_call/3 that pattern matches for the {:add_player, name} tuple from GenServer.call/3
@@ -183,6 +211,15 @@ defmodule IslandsEngine.Game do
     end)
   end
 
-  defp reply_success(state_data, reply), do: {:reply, reply, state_data}
+  defp fresh_state(name) do
+    player1 = %{name: name, board: Board.new(), guesses: Guesses.new()}
+    player2 = %{name: nil,  board: Board.new(), guesses: Guesses.new()}
+    %{player1: player1, player2: player2, rules: %Rules{}}
+  end
+
+  defp reply_success(state_data, reply) do
+    :ets.insert(:game_state, {state_data.player1.name, state_data})
+    {:reply, reply, state_data, @timeout}
+  end
 
 end
